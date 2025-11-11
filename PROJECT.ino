@@ -92,19 +92,20 @@
 #define NOTE_D8  4699
 #define NOTE_DS8 4978
 
-const int enableButtonPin = 2;
-const int disableButtonPin = 3;
-const int vibratorPin = 8;
-const int piezoPin = 9;
-const int ledPin = 13;
+const uint8_t enableButtonPin = 2;
+const uint8_t disableButtonPin = 3;
+const uint8_t vibratorPin = 8;
+const uint8_t piezoPin = 9;
+const uint8_t ledPin = 13;
 
 CallbackButton enableButton = CallbackButton(enableButtonPin);
 CallbackButton disableButton = CallbackButton(disableButtonPin);
 
 bool enabled = false;
-unsigned long activatedTime = 0;
-unsigned long activationDelay = 0;
+uint32_t toggleTime = 0;
+uint32_t activationDelay = 0;
 uint8_t toneIndex = 0;
+uint32_t toneStartTime = 0;
 
 typedef struct {
   uint16_t tone;
@@ -128,34 +129,36 @@ ringtone_t ringtone[] = {
 };
 uint8_t ringtoneSize = sizeof(ringtone) / sizeof(*ringtone);
 
-#define rot8(x,k) (((x) << (k))|((x) >> (8 - (k))))
+#define rotl8(x, k) (((x) << (k)) | ((x) >> (8 - (k))))
 uint8_t jsf8_random() {
-	static uint8_t a = 0xf1;
-	static uint8_t b = 0xee, c = 0xee, d = 0xee;
+  static uint8_t a = 0xf1;
+  static uint8_t b = 0xee, c = 0xee, d = 0xee;
 
-	uint8_t e = a - rot8(b, 1);
-	a = b ^ rot8(c, 4);
-	b = c + d;
-	c = d + e;
-	return d = e + a;
+  uint8_t e = a - rotl8(b, 1);
+  a = b ^ rotl8(c, 4);
+  b = c + d;
+  c = d + e;
+  return d = e + a;
 }
 
 void enableButtonHandler(int port, int clickType) {
   if (!enabled) {
-    Serial.print("Enable\n");
+    //Serial.print("Enable\n");
     enabled = true;
-    activatedTime = millis();
+    toggleTime = millis();
     activationDelay = 5000 + jsf8_random() * 20;
     toneIndex = 0;
+    toneStartTime = toggleTime + activationDelay;
   }
 }
 void disableButtonHandler(int port, int clickType) {
-  Serial.print("Disable\n");
+  //Serial.print("Disable\n");
   enabled = false;
+  toggleTime = millis();
 }
 
 void setup() {
-  Serial.begin(9600);
+  //Serial.begin(9600);
   pinMode(enableButtonPin, INPUT_PULLUP);
   pinMode(disableButtonPin, INPUT_PULLUP);
   pinMode(vibratorPin, OUTPUT);
@@ -168,20 +171,30 @@ void setup() {
 void loop() {
   enableButton.checkButtonState();
   disableButton.checkButtonState();
-  bool actuallyEnabled = enabled && (millis() - activatedTime) >= activationDelay;
-  bool ledState = enabled ? (millis() / 250 % 2) : 1;
-  bool vibrate = actuallyEnabled ? (millis() / 1000 % 2) : 0;
+  uint32_t currentTime = millis();
+  uint32_t timeSinceToggle = currentTime - toggleTime;
+  bool actuallyEnabled = enabled && timeSinceToggle >= activationDelay;
+  bool ledState = enabled ? (currentTime / 250 % 2) : 1;
+  bool vibrate;
+  if (enabled) {
+    if (actuallyEnabled) {
+      vibrate = currentTime / 1000 % 2;
+    } else {
+      vibrate = (timeSinceToggle <= 1000);
+    }
+  } else {
+    vibrate = (timeSinceToggle <= 250);
+  }
   digitalWrite(ledPin, ledState);
   digitalWrite(vibratorPin, vibrate);
   
-  static unsigned long toneStartTime = activatedTime + activationDelay;
   if (actuallyEnabled) {
-    if (millis() - toneStartTime > ringtone[toneIndex].time) {
+    if (currentTime - toneStartTime > ringtone[toneIndex].time) {
       toneIndex += 1;
       if (toneIndex == ringtoneSize) {
         // Reset ringtone
         toneIndex = 0;
-        toneStartTime = millis();
+        toneStartTime = currentTime;
       }
     }
     tone(piezoPin, ringtone[toneIndex].tone);
