@@ -174,11 +174,11 @@ void loop() {
   uint32_t currentTime = millis();
   uint32_t timeSinceToggle = currentTime - toggleTime;
   bool actuallyEnabled = enabled && timeSinceToggle >= activationDelay;
-  bool ledState = enabled ? (currentTime / 250 % 2) : 1;
+  bool ledState = enabled ? (timeSinceToggle / 250 % 2) : 1;
   bool vibrate;
   if (enabled) {
     if (actuallyEnabled) {
-      vibrate = currentTime / 1000 % 2;
+      vibrate = timeSinceToggle / 1000 % 2;
     } else {
       vibrate = (timeSinceToggle <= 750);
     }
