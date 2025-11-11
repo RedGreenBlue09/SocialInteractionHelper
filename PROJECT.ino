@@ -180,10 +180,10 @@ void loop() {
     if (actuallyEnabled) {
       vibrate = currentTime / 1000 % 2;
     } else {
-      vibrate = (timeSinceToggle <= 1000);
+      vibrate = (timeSinceToggle <= 750);
     }
   } else {
-    vibrate = (timeSinceToggle <= 250);
+    vibrate = (timeSinceToggle <= 125);
   }
   digitalWrite(ledPin, ledState);
   digitalWrite(vibratorPin, vibrate);
