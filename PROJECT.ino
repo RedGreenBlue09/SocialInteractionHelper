@@ -105,6 +105,7 @@ bool enabled = false;
 uint32_t toggleTime = 0;
 uint32_t activationDelay = 0;
 uint8_t toneIndex = 0;
+uint32_t activationTime = 0;
 uint32_t toneStartTime = 0;
 
 typedef struct {
@@ -146,9 +147,10 @@ void enableButtonHandler(int port, int clickType) {
     //Serial.print("Enable\n");
     enabled = true;
     toggleTime = millis();
-    activationDelay = 5000 + jsf8_random() * 20;
+    activationDelay = 5000 + jsf8_random() * 60;
     toneIndex = 0;
-    toneStartTime = toggleTime + activationDelay;
+    activationTime = toggleTime + activationDelay;
+    toneStartTime = activationTime;
   }
 }
 void disableButtonHandler(int port, int clickType) {
@@ -174,7 +176,7 @@ void loop() {
   uint32_t currentTime = millis();
   uint32_t timeSinceToggle = currentTime - toggleTime;
   bool actuallyEnabled = enabled && timeSinceToggle >= activationDelay;
-  bool ledState = enabled ? (timeSinceToggle / 250 % 2) : 1;
+  bool ledState = (enabled && !actuallyEnabled) ? (timeSinceToggle / 250 % 2) : 1;
   bool vibrate;
   if (enabled) {
     if (actuallyEnabled) {
@@ -189,7 +191,11 @@ void loop() {
   digitalWrite(vibratorPin, vibrate);
   
   if (actuallyEnabled) {
-    if (currentTime - toneStartTime > ringtone[toneIndex].time) {
+    if (currentTime - activationTime >= 60000) {
+      disableButtonHandler(disableButtonPin, CALLBACK_BUTTON_SHORT_CLICK);
+      return;
+    }
+    if (currentTime - toneStartTime >= ringtone[toneIndex].time) {
       toneIndex += 1;
       if (toneIndex == ringtoneSize) {
         // Reset ringtone
