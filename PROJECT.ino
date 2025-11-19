@@ -1,5 +1,6 @@
 
 #include "CallbackButton.h" // Library modified for PULLUP
+#include <EEPROM.h>
 
 // Tones
 #define NOTE_B0  31
@@ -130,27 +131,36 @@ ringtone_t ringtone[] = {
 };
 uint8_t ringtoneSize = sizeof(ringtone) / sizeof(*ringtone);
 
+typedef struct {
+  uint8_t a;
+  uint8_t b;
+  uint8_t c;
+  uint8_t d;
+} jsf8_state;
 #define rotl8(x, k) (((x) << (k)) | ((x) >> (8 - (k))))
-uint8_t jsf8_random() {
-  static uint8_t a = 0xf1;
-  static uint8_t b = 0xee, c = 0xee, d = 0xee;
 
-  uint8_t e = a - rotl8(b, 1);
-  a = b ^ rotl8(c, 4);
-  b = c + d;
-  c = d + e;
-  return d = e + a;
+const uint16_t rngRomAddress = 4;
+jsf8_state rngState;
+uint8_t jsf8_random() {
+  uint8_t e = rngState.a - rotl8(rngState.b, 1);
+  rngState.a = rngState.b ^ rotl8(rngState.c, 4);
+  rngState.b = rngState.c + rngState.d;
+  rngState.c = rngState.d + e;
+  rngState.d = e + rngState.a;
+
+  EEPROM.put(rngRomAddress, rngState);
+  return rngState.d;
 }
 
 void enableButtonHandler(int port, int clickType) {
   if (!enabled) {
     //Serial.print("Enable\n");
-    enabled = true;
     toggleTime = millis();
     activationDelay = 5000 + jsf8_random() * 60;
     toneIndex = 0;
     activationTime = toggleTime + activationDelay;
     toneStartTime = activationTime;
+    enabled = true;
   }
 }
 void disableButtonHandler(int port, int clickType) {
@@ -163,9 +173,21 @@ void setup() {
   //Serial.begin(9600);
   pinMode(enableButtonPin, INPUT_PULLUP);
   pinMode(disableButtonPin, INPUT_PULLUP);
+
   pinMode(vibratorPin, OUTPUT);
+  digitalWrite(vibratorPin, 0);
+
   pinMode(piezoPin, OUTPUT);
+  noTone(piezoPin);
+
   pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, 1);
+  
+  EEPROM.get(rngRomAddress, rngState);
+  // Avoid zero state which doesn't work.
+  if (rngState.a + rngState.b + rngState.c + rngState.d == 0)
+    rngState = {0xf1, 0xee, 0xee, 0xee};
+
   enableButton.setCallbackFunction(enableButtonHandler);
   disableButton.setCallbackFunction(disableButtonHandler);
 }
@@ -182,7 +204,7 @@ void loop() {
     if (actuallyEnabled) {
       vibrate = timeSinceToggle / 1000 % 2;
     } else {
-      vibrate = (timeSinceToggle <= 750);
+      vibrate = (timeSinceToggle <= 500);
     }
   } else {
     vibrate = (timeSinceToggle <= 125);
