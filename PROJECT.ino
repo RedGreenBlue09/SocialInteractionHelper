@@ -204,7 +204,7 @@ void loop() {
     if (actuallyEnabled) {
       vibrate = timeSinceToggle / 1000 % 2;
     } else {
-      vibrate = (timeSinceToggle <= 500);
+      vibrate = (timeSinceToggle <= 375);
     }
   } else {
     vibrate = (timeSinceToggle <= 125);
